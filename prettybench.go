@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 )
 
 var noPassthrough = flag.Bool("no-passthrough", false, "Don't print non-benchmark lines")
+var sortResults = flag.Bool("sort", false, "Sort result from fastest time/iter to slowest")
 
 type BenchOutputGroup struct {
 	Lines []*bench.Benchmark
@@ -50,6 +52,12 @@ func (g *BenchOutputGroup) String() string {
 	}
 	table.Cells = append(table.Cells, underlines)
 	timeFormatFunc := g.TimeFormatFunc()
+
+	if *sortResults {
+		sort.Slice(g.Lines, func(a, b int) bool {
+			return g.Lines[a].NsPerOp < g.Lines[b].NsPerOp
+		})
+	}
 
 	for _, line := range g.Lines {
 		row := []string{line.Name, FormatIterations(line.N), timeFormatFunc(line.NsPerOp)}
