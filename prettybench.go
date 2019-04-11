@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 )
 
 var noPassthrough = flag.Bool("no-passthrough", false, "Don't print non-benchmark lines")
+var colourful = flag.Bool("colourful", false, "Add colours to the output to see at a glance the \"best\" and \"worst\" results")
 
 type BenchOutputGroup struct {
 	Lines []*bench.Benchmark
@@ -51,7 +53,15 @@ func (g *BenchOutputGroup) String() string {
 	table.Cells = append(table.Cells, underlines)
 	timeFormatFunc := g.TimeFormatFunc()
 
-	for _, line := range g.Lines {
+	var fastest, slowest int
+	for i, line := range g.Lines {
+		if line.NsPerOp >= g.Lines[slowest].NsPerOp {
+			slowest = i
+		}
+
+		if line.NsPerOp <= g.Lines[fastest].NsPerOp {
+			fastest = i
+		}
 		row := []string{line.Name, FormatIterations(line.N), timeFormatFunc(line.NsPerOp)}
 		if (g.Measured & bench.MBPerS) > 0 {
 			row = append(row, FormatMegaBytesPerSecond(line))
@@ -64,6 +74,8 @@ func (g *BenchOutputGroup) String() string {
 		}
 		table.Cells = append(table.Cells, row)
 	}
+
+	log.Print(fastest, slowest)
 	for i := range columnNames {
 		maxLength := 0
 		for _, row := range table.Cells {
@@ -74,7 +86,13 @@ func (g *BenchOutputGroup) String() string {
 		table.MaxLengths = append(table.MaxLengths, maxLength)
 	}
 	var buf bytes.Buffer
-	for _, row := range table.Cells {
+	for i, row := range table.Cells {
+		if i == fastest+2 {
+			fmt.Fprint(&buf, "\033[32m")
+		}
+		if i == slowest+2 {
+			fmt.Fprint(&buf, "\033[31m")
+		}
 		for i, cell := range row {
 			var format string
 			switch i {
@@ -86,6 +104,9 @@ func (g *BenchOutputGroup) String() string {
 				format = "%%%ds   "
 			}
 			fmt.Fprintf(&buf, fmt.Sprintf(format, table.MaxLengths[i]), cell)
+		}
+		if i == fastest+2 || i == slowest+2 {
+			fmt.Fprint(&buf, "\033[0m")
 		}
 		fmt.Fprint(&buf, "\n")
 	}
